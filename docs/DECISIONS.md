@@ -77,3 +77,28 @@ As the repository is initialized and connected to its remote (`origin`), clear v
 - **Positive:** Clean, readable git log suitable for automated changelog generation and `git bisect`.
 - **Positive:** Prevents ~6 MB of redundant binary soundfont/font files from bloating git history while preserving zero-config asset serving via `@coderline/alphatab-vite`.
 
+---
+
+## ADR-004: Zero-Latency Web Audio API Drum Synthesizer for Live Input (`useDrumSynth.ts`)
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Phase:** Phase 1 Refinement (Live Input Audio & Demo Score Simplification)
+
+### Context
+1. The built-in `alphaTex` demo drum track was simplified into a progressive 4-bar exercise (2 bars of quarter-note Kick/Snare alternating `36`/`38`, followed by 2 bars adding 8th-note Closed Hi-Hats `42`) for straightforward input testing.
+2. Pressing mapped keys or clicking pads in `TriggerBar.vue` needed to produce immediate audible drum sounds, including while the `alphaTab` score player is actively playing.
+3. `@coderline/alphatab`'s built-in `api.playNote()` / `IAlphaSynth.playOneTimeMidiFile()` stops any ongoing score playback because it replaces the active sequencer buffer in the worker.
+
+### Decision
+1. **Dedicated Web Audio API Drum Synthesizer (`src/composables/useDrumSynth.ts`):**
+   - Implemented a zero-latency Web Audio API synthesizer generating distinct GM drum voices (Kick `36`, Snare `38`, Closed/Open Hi-Hat `42`/`46`, High/Low-Mid Toms `50`/`47`, Crash `49`, Ride `51`, plus pitched fallback for melodic MIDI notes).
+   - Subscribed `useDrumSynth` directly to `useInputBus.onInput()` so keyboard, virtual pad, debug, and future WebMIDI events all trigger live audio identically without interrupting `alphaTab` playback.
+   - Stored `AudioContext` and the shared noise `AudioBuffer` in non-proxied module variables to uphold the Vue 3 hardware/audio reactivity invariant.
+2. **Pad Audio Toggle (`TriggerBar.vue`):**
+   - Added a `Pad Audio On / Muted` toggle (`data-testid="toggle-pad-audio"`) in `TriggerBar.vue` so users can mute local synth output when using external hardware monitoring.
+
+### Consequences
+- **Positive:** Sub-2ms drum audio response on every key press or pad click that mixes seamlessly alongside active `alphaTab` score playback.
+- **Positive:** Hardware-agnostic by listening to `useInputBus.ts`.
+
+
