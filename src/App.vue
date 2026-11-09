@@ -10,6 +10,7 @@ import { useInputBus } from './composables/useInputBus'
 import { useKeyboardInput } from './composables/useKeyboardInput'
 import { useDrumSynth } from './composables/useDrumSynth'
 import { useHitEvaluation } from './composables/useHitEvaluation'
+import { useViewerRegistry } from './composables/useViewerRegistry'
 import type { KeyPadBinding, PracticeInputEvent } from './types/input'
 import type { BarHitOverlayMarker } from './types/evaluation'
 
@@ -20,6 +21,7 @@ const alphaTabContainerRef = computed<HTMLElement | null>(
 )
 
 const player = useAlphaTab(alphaTabContainerRef)
+const viewerRegistry = useViewerRegistry()
 const inputBus = useInputBus()
 const keyboard = useKeyboardInput()
 const drumSynth = useDrumSynth()
@@ -195,8 +197,18 @@ onBeforeUnmount(() => {
       :is-ready="player.isReady.value"
       :loaded-file-name="player.loadedFileName.value"
       :error-message="player.errorMessage.value"
+      :bars="player.bars.value"
+      :target-notes="player.targetNotes.value"
+      :results-by-note-id="evaluation.resultsByNoteId.value"
+      :current-tick="player.currentTick.value"
+      :end-tick="player.endTick.value"
+      :is-playing="player.isPlaying.value"
+      :is-finished="player.isFinished.value"
       :bar-hit-markers="barHitMarkers"
+      :viewers="viewerRegistry.viewers.value"
+      :active-viewer-id="viewerRegistry.activeViewerId.value"
       @file-dropped="player.loadGpFile"
+      @select-viewer="viewerRegistry.selectViewer"
     />
 
     <TriggerBar

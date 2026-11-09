@@ -7,7 +7,6 @@ import {
   watch,
   type Ref,
 } from 'vue'
-import { getMidiNoteInfo } from '../constants/defaultKeyMap'
 import type {
   EvaluationStats,
   HitEvaluationResult,
@@ -17,6 +16,7 @@ import type {
 } from '../types/evaluation'
 import type { PracticeInputEvent } from '../types/input'
 import { useInputBus } from './useInputBus'
+import { useInstrumentProfile } from './useInstrumentProfile'
 
 export const QUARTER_NOTE_TICKS = 960
 export const PERFECT_WINDOW_MS = 55
@@ -43,6 +43,7 @@ export interface HitEvaluationContext {
  */
 export function useHitEvaluation(ctx: HitEvaluationContext) {
   const inputBus = useInputBus()
+  const instrumentProfile = useInstrumentProfile()
 
   const perfectCount = ref<number>(0)
   const goodCount = ref<number>(0)
@@ -92,7 +93,7 @@ export function useHitEvaluation(ctx: HitEvaluationContext) {
     partial: Omit<HitEvaluationResult, 'id' | 'shortLabel'>,
   ): HitEvaluationResult {
     resultSeq += 1
-    const info = getMidiNoteInfo(partial.midiNote, true)
+    const info = instrumentProfile.getNoteInfo(partial.midiNote, true)
     const result: HitEvaluationResult = {
       ...partial,
       id: `eval-${resultSeq}`,
@@ -138,7 +139,8 @@ export function useHitEvaluation(ctx: HitEvaluationContext) {
 
     const activeTick = getInterpolatedTick(event.timestamp)
     const notes = ctx.targetNotes.value
-    const noteInfo = getMidiNoteInfo(event.note, true)
+    const normalizedNote = instrumentProfile.resolveMidiNote(event.note)
+    const noteInfo = instrumentProfile.getNoteInfo(normalizedNote, true)
     const eventLabel = event.label ?? noteInfo.label
 
     let bestCandidate: TargetScoreNote | null = null
@@ -148,7 +150,7 @@ export function useHitEvaluation(ctx: HitEvaluationContext) {
       if (evaluatedNoteIds.has(target.id)) {
         continue
       }
-      if (target.midiNote !== event.note) {
+      if (instrumentProfile.resolveMidiNote(target.midiNote) !== normalizedNote) {
         continue
       }
       const deltaMs = ticksToMs(activeTick - target.tick)
@@ -391,6 +393,18 @@ export function useHitEvaluation(ctx: HitEvaluationContext) {
     return group.length > 0 ? group : notes.slice(0, 1)
   })
 
+  const resultsByNoteId = computed<Readonly<Record<string, HitEvaluationResult>>>(
+    () => {
+      const map: Record<string, HitEvaluationResult> = {}
+      for (const res of passResults.value) {
+        if (res.targetNoteId) {
+          map[res.targetNoteId] = res
+        }
+      }
+      return map
+    },
+  )
+
   function resetStats(): void {
     perfectCount.value = 0
     goodCount.value = 0
@@ -425,6 +439,7 @@ export function useHitEvaluation(ctx: HitEvaluationContext) {
     lastResult: readonly(lastResult),
     recentResults: readonly(recentResults),
     passResults: readonly(passResults),
+    resultsByNoteId,
     upcomingNotes,
     evaluateInputEvent,
     resetStats,

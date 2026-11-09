@@ -39,6 +39,44 @@ export interface KeyPadBinding {
   category: 'KICK' | 'SNARE' | 'HAT' | 'TOM' | 'CYM'
 }
 
+export type InputAdapterKind =
+  | 'keyboard'
+  | 'virtual-pad'
+  | 'webmidi'
+  | 'audio'
+  | 'custom'
+
+export interface InputAdapterDescriptor {
+  /** Unique adapter identifier (e.g., 'keyboard', 'virtual-pad', 'webmidi') */
+  id: string
+  /** Human-readable adapter name */
+  name: string
+  /** Adapter category */
+  kind: InputAdapterKind
+  /** Whether the browser/device supports this adapter */
+  isAvailable: boolean
+  /** Whether hardware or listener is currently connected */
+  isConnected: boolean
+  /** Whether input from this adapter is active */
+  isEnabled: boolean
+}
+
+export interface InstrumentProfile {
+  /** Unique profile identifier (e.g., 'gm-standard-drums', 'roland-td27kv') */
+  id: string
+  /** Display name */
+  name: string
+  /** Whether profile targets percussion or melodic notes */
+  isPercussion: boolean
+  /** Ordered key/pad bindings for this profile */
+  bindings: readonly KeyPadBinding[]
+  /**
+   * Optional multi-zone / alias map normalizing incoming raw MIDI notes
+   * (e.g., Snare rimshot 40 -> Snare head 38, Hi-Hat pedal 44 -> Closed Hi-Hat 42)
+   */
+  midiAliases?: Readonly<Record<number, number>>
+}
+
 export interface PlayerDebugState {
   isReady: boolean
   isSoundFontLoaded: boolean

@@ -9,8 +9,8 @@ import {
 } from 'vue'
 import * as alphaTab from '@coderline/alphatab'
 import { DEFAULT_ALPHATEX_SCORE } from '../constants/defaultScore'
-import { getMidiNoteInfo } from '../constants/defaultKeyMap'
-import type { TargetScoreNote } from '../types/evaluation'
+import type { ScoreBarMeta, TargetScoreNote } from '../types/evaluation'
+import { useInstrumentProfile } from './useInstrumentProfile'
 
 export interface TrackSummary {
   index: number
@@ -34,6 +34,8 @@ export interface TrackSummary {
  *    `player.soundFont`   -> `${import.meta.env.BASE_URL}soundfont/sonivox.sf2`
  */
 export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
+  const instrumentProfile = useInstrumentProfile()
+
   // Non-proxied AlphaTabApi instance
   const apiRef = shallowRef<alphaTab.AlphaTabApi | null>(null)
   let rawScore: alphaTab.model.Score | null = null
@@ -56,6 +58,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
   const loadedFileName = ref<string>('Built-in Demo (alphaTex)')
   const tracks = ref<TrackSummary[]>([])
   const activeTrackIndex = ref<number>(0)
+  const bars = ref<ScoreBarMeta[]>([])
   const targetNotes = ref<TargetScoreNote[]>([])
   const currentTick = ref<number>(0)
   const endTick = ref<number>(0)
@@ -93,6 +96,22 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     })
   }
 
+  function extractScoreBars(score: alphaTab.model.Score): ScoreBarMeta[] {
+    return score.masterBars.map((mb, idx) => {
+      const startTick = mb.start
+      const durationTicks = mb.calculateDuration()
+      return {
+        index: idx,
+        number: idx + 1,
+        startTick,
+        endTick: startTick + durationTicks,
+        durationTicks,
+        timeSignatureNumerator: mb.timeSignatureNumerator || 4,
+        timeSignatureDenominator: mb.timeSignatureDenominator || 4,
+      }
+    })
+  }
+
   function extractTrackTargetNotes(
     score: alphaTab.model.Score,
     trackIndex: number,
@@ -117,6 +136,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
               continue
             }
             const tick = beat.absolutePlaybackStart
+            const durationTicks = Math.max(1, beat.playbackDuration)
             for (let nIdx = 0; nIdx < beat.notes.length; nIdx++) {
               const note = beat.notes[nIdx]
               if (!note || note.isTieDestination) {
@@ -128,14 +148,16 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
                 continue
               }
               seenAtTick.add(dedupeKey)
-              const info = getMidiNoteInfo(midiNote, isPercussion)
+              const info = instrumentProfile.getNoteInfo(midiNote, isPercussion)
               notes.push({
                 id: `${bar.index}:${beat.index}:${nIdx}:${midiNote}`,
                 tick,
+                durationTicks,
                 midiNote,
                 barIndex: bar.index,
                 beatIndex: beat.index,
                 label: info.label,
+                shortLabel: info.shortLabel,
                 keyHint: info.keyHint,
               })
             }
@@ -526,6 +548,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
       scoreArtist.value = score.artist || ''
       baseTempoBpm.value = score.tempo || 120
       tracks.value = extractTrackSummaries(score)
+      bars.value = extractScoreBars(score)
 
       const renderedTrackIdx = instance.tracks?.[0]?.index ?? 0
       activeTrackIndex.value = renderedTrackIdx
@@ -637,6 +660,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     loadedFileName: readonly(loadedFileName),
     tracks: readonly(tracks),
     activeTrackIndex: readonly(activeTrackIndex),
+    bars: readonly(bars),
     targetNotes: readonly(targetNotes),
     currentTick: readonly(currentTick),
     endTick: readonly(endTick),

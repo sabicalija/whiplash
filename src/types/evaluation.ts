@@ -9,11 +9,30 @@ export type MissReason =
   | 'too-late'
   | 'passed'
 
+export interface ScoreBarMeta {
+  /** 0-based bar index */
+  index: number
+  /** 1-based display bar number */
+  number: number
+  /** Absolute start tick of the bar */
+  startTick: number
+  /** Absolute end tick of the bar */
+  endTick: number
+  /** Duration of the bar in MIDI ticks */
+  durationTicks: number
+  /** Time signature numerator (e.g., 4 in 4/4) */
+  timeSignatureNumerator: number
+  /** Time signature denominator (e.g., 4 in 4/4) */
+  timeSignatureDenominator: number
+}
+
 export interface TargetScoreNote {
   /** Unique identifier within the active track (`${barIndex}:${beatIndex}:${noteIndex}:${midiNote}`) */
   id: string
   /** Absolute MIDI tick start (`beat.absolutePlaybackStart`, 960 ticks per quarter note) */
   tick: number
+  /** Beat playback duration in MIDI ticks (for non-tab viewers such as grids or highways) */
+  durationTicks: number
   /** Target MIDI note number (`note.realValue`, e.g., 36 = Kick, 38 = Snare, 42 = Closed Hi-Hat) */
   midiNote: number
   /** 0-based bar index */
@@ -22,6 +41,8 @@ export interface TargetScoreNote {
   beatIndex: number
   /** Human-readable voice/note label (e.g., 'Kick Drum', 'Acoustic Snare', 'A1') */
   label: string
+  /** Compact voice/note code (e.g., 'K', 'S', 'HH', 'A1') */
+  shortLabel: string
   /** Optional mapped keyboard shortcut hint (e.g., 'Space', 'F', 'J') */
   keyHint?: string
 }

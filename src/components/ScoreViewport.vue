@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { BarHitOverlayMarker } from '../types/evaluation'
+import type {
+  ScoreViewerDescriptor,
+  ScoreViewerSessionProps,
+} from '../types/viewer'
 
-defineProps<{
-  isReady: boolean
-  loadedFileName: string
-  errorMessage: string | null
-  barHitMarkers: readonly BarHitOverlayMarker[]
-}>()
+defineProps<
+  ScoreViewerSessionProps & {
+    viewers: readonly ScoreViewerDescriptor[]
+    activeViewerId: string
+  }
+>()
 
 const emit = defineEmits<{
   fileDropped: [file: File]
+  selectViewer: [viewerId: string]
 }>()
 
 const viewportElement = ref<HTMLElement | null>(null)
@@ -72,6 +77,27 @@ defineExpose({
         <span class="file-source-tag" data-testid="loaded-file-name">
           Source: {{ loadedFileName }}
         </span>
+        <div
+          v-if="viewers.length > 1"
+          class="viewer-switcher"
+          role="group"
+          aria-label="Score Viewer Mode"
+          data-testid="viewer-switcher"
+        >
+          <button
+            v-for="viewer in viewers"
+            :key="viewer.id"
+            type="button"
+            class="btn btn-sm"
+            :class="{ 'btn-active': viewer.id === activeViewerId }"
+            :data-testid="`viewer-option-${viewer.id}`"
+            :aria-pressed="viewer.id === activeViewerId"
+            :title="viewer.description"
+            @click="emit('selectViewer', viewer.id)"
+          >
+            {{ viewer.shortLabel }}
+          </button>
+        </div>
         <span class="overlay-legend" aria-label="Note Hit Color Legend">
           <span class="legend-dot is-early" aria-hidden="true" />
           <span>Early</span>
@@ -108,8 +134,11 @@ defineExpose({
       </div>
     </div>
 
-    <div class="alphatab-scroll-frame">
-      <div class="score-sheet-wrapper">
+    <div class="alphatab-scroll-frame" :data-active-viewer="activeViewerId">
+      <div
+        v-show="activeViewerId === 'alphatab-sheet'"
+        class="score-sheet-wrapper"
+      >
         <div
           ref="viewportElement"
           class="alphatab-surface"
@@ -139,6 +168,8 @@ defineExpose({
           />
         </div>
       </div>
+
+      <slot name="custom-viewer" />
     </div>
   </main>
 </template>
