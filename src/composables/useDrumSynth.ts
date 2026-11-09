@@ -16,6 +16,7 @@ let audioCtx: AudioContext | null = null
 let noiseBuffer: AudioBuffer | null = null
 
 const isAudioEnabled = ref<boolean>(true)
+const volumePercent = ref<number>(100)
 const lastPlayedNote = ref<number | null>(null)
 
 function getOrCreateAudioContext(): AudioContext | null {
@@ -305,7 +306,7 @@ function playFallbackPitch(ctx: AudioContext, now: number, note: number, gainSca
 }
 
 export function playDrumNote(note: number, velocity = 100): boolean {
-  if (!isAudioEnabled.value) {
+  if (!isAudioEnabled.value || volumePercent.value <= 0) {
     return false
   }
   const ctx = getOrCreateAudioContext()
@@ -315,7 +316,8 @@ export function playDrumNote(note: number, velocity = 100): boolean {
 
   const now = ctx.currentTime
   const clampedVelocity = Math.max(1, Math.min(127, velocity))
-  const gainScale = 0.3 + (clampedVelocity / 127) * 0.7
+  const velocityScale = 0.3 + (clampedVelocity / 127) * 0.7
+  const gainScale = velocityScale * (volumePercent.value / 100)
   lastPlayedNote.value = note
 
   switch (note) {
@@ -376,6 +378,11 @@ export function useDrumSynth() {
     isAudioEnabled.value = !isAudioEnabled.value
   }
 
+  function setVolumePercent(percent: number): void {
+    const clamped = Math.max(0, Math.min(150, Math.round(percent)))
+    volumePercent.value = clamped
+  }
+
   onMounted(() => {
     unsubscribe = inputBus.onInput((event) => {
       playDrumNote(event.note, event.velocity)
@@ -391,9 +398,11 @@ export function useDrumSynth() {
 
   return {
     isAudioEnabled: readonly(isAudioEnabled),
+    volumePercent: readonly(volumePercent),
     lastPlayedNote: readonly(lastPlayedNote),
     playDrumNote,
     setAudioEnabled,
     toggleAudio,
+    setVolumePercent,
   }
 }

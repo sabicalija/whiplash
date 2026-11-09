@@ -16,6 +16,9 @@ export interface TrackSummary {
   shortName: string
   isPercussion: boolean
   channelIndex: number
+  volumePercent: number
+  isMuted: boolean
+  isSolo: boolean
 }
 
 /**
@@ -41,6 +44,8 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
   const isLooping = ref<boolean>(false)
   const tempoPercent = ref<number>(100)
   const baseTempoBpm = ref<number>(110)
+  const masterVolumePercent = ref<number>(100)
+  const metronomeVolumePercent = ref<number>(0)
   const scoreTitle = ref<string>('Loading…')
   const scoreSubtitle = ref<string>('')
   const scoreArtist = ref<string>('')
@@ -65,8 +70,33 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
         shortName: track.shortName || `T${idx + 1}`,
         isPercussion,
         channelIndex: track.playbackInfo.primaryChannel,
+        volumePercent: 100,
+        isMuted: Boolean(track.playbackInfo.isMute),
+        isSolo: Boolean(track.playbackInfo.isSolo),
       }
     })
+  }
+
+  function syncAudioMixToEngine(): void {
+    const api = apiRef.value
+    if (!api) {
+      return
+    }
+    api.masterVolume = masterVolumePercent.value / 100
+    api.metronomeVolume = metronomeVolumePercent.value / 100
+
+    if (!rawScore) {
+      return
+    }
+    for (const summary of tracks.value) {
+      const track = rawScore.tracks[summary.index]
+      if (track) {
+        const rawTrack = markRaw(track)
+        api.changeTrackVolume([rawTrack], summary.volumePercent / 100)
+        api.changeTrackMute([rawTrack], summary.isMuted)
+        api.changeTrackSolo([rawTrack], summary.isSolo)
+      }
+    }
   }
 
   function loadDefaultScore(): void {
@@ -157,6 +187,80 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     }
   }
 
+  function setMasterVolume(percent: number): void {
+    const clamped = Math.max(0, Math.min(150, Math.round(percent)))
+    masterVolumePercent.value = clamped
+    const api = apiRef.value
+    if (api) {
+      api.masterVolume = clamped / 100
+    }
+  }
+
+  function setMetronomeVolume(percent: number): void {
+    const clamped = Math.max(0, Math.min(150, Math.round(percent)))
+    metronomeVolumePercent.value = clamped
+    const api = apiRef.value
+    if (api) {
+      api.metronomeVolume = clamped / 100
+    }
+  }
+
+  function setTrackVolume(trackIndex: number, percent: number): void {
+    const clamped = Math.max(0, Math.min(150, Math.round(percent)))
+    tracks.value = tracks.value.map((t) =>
+      t.index === trackIndex ? { ...t, volumePercent: clamped } : t,
+    )
+    const api = apiRef.value
+    const targetTrack = rawScore?.tracks[trackIndex]
+    if (api && targetTrack) {
+      api.changeTrackVolume([markRaw(targetTrack)], clamped / 100)
+    }
+  }
+
+  function toggleTrackMute(trackIndex: number): void {
+    const current = tracks.value.find((t) => t.index === trackIndex)
+    if (!current) {
+      return
+    }
+    const nextMuted = !current.isMuted
+    tracks.value = tracks.value.map((t) =>
+      t.index === trackIndex ? { ...t, isMuted: nextMuted } : t,
+    )
+    const api = apiRef.value
+    const targetTrack = rawScore?.tracks[trackIndex]
+    if (api && targetTrack) {
+      api.changeTrackMute([markRaw(targetTrack)], nextMuted)
+    }
+  }
+
+  function toggleTrackSolo(trackIndex: number): void {
+    const current = tracks.value.find((t) => t.index === trackIndex)
+    if (!current) {
+      return
+    }
+    const nextSolo = !current.isSolo
+    tracks.value = tracks.value.map((t) =>
+      t.index === trackIndex ? { ...t, isSolo: nextSolo } : t,
+    )
+    const api = apiRef.value
+    const targetTrack = rawScore?.tracks[trackIndex]
+    if (api && targetTrack) {
+      api.changeTrackSolo([markRaw(targetTrack)], nextSolo)
+    }
+  }
+
+  function resetAudioMix(): void {
+    setMasterVolume(100)
+    setMetronomeVolume(0)
+    tracks.value = tracks.value.map((t) => ({
+      ...t,
+      volumePercent: 100,
+      isMuted: false,
+      isSolo: false,
+    }))
+    syncAudioMixToEngine()
+  }
+
   onMounted(() => {
     const el = containerRef.value
     if (!el) {
@@ -201,6 +305,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
       isPlayerReady.value = true
       instance.isLooping = isLooping.value
       instance.playbackSpeed = tempoPercent.value / 100
+      syncAudioMixToEngine()
     })
 
     instance.playerStateChanged.on((args) => {
@@ -239,6 +344,8 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     isLooping: readonly(isLooping),
     tempoPercent: readonly(tempoPercent),
     baseTempoBpm: readonly(baseTempoBpm),
+    masterVolumePercent: readonly(masterVolumePercent),
+    metronomeVolumePercent: readonly(metronomeVolumePercent),
     scoreTitle: readonly(scoreTitle),
     scoreSubtitle: readonly(scoreSubtitle),
     scoreArtist: readonly(scoreArtist),
@@ -258,5 +365,11 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     setLooping,
     toggleLoop,
     setTempoPercent,
+    setMasterVolume,
+    setMetronomeVolume,
+    setTrackVolume,
+    toggleTrackMute,
+    toggleTrackSolo,
+    resetAudioMix,
   }
 }
