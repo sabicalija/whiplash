@@ -12,12 +12,14 @@ Whiplash is an extensible, instrument-agnostic **Music & Percussion Practice Tra
 ## 2. Current Project State
 - **Status:** **Phase 1 & Phase 2 Completed & Verified** (Core alphaTab Player, Keyboard Input Adapter, Live Drum Synth, Audio Mixer & Hit/Timing Evaluation Engine).
 - **Entry Points:** `src/main.ts`, `src/App.vue`
-- **Core Composables:**
-  - `src/composables/useAlphaTab.ts`: Manages `AlphaTabApi` lifecycle (`shallowRef` + `markRaw`), built-in 2-track `alphaTex` 1.9 score (`src/constants/defaultScore.ts`), `.gp3`–`.gp8` drag-and-drop & file picker loading, track switching, active track `TargetScoreNote` extraction, per-track audio mixer (volume/mute/solo) + master/metronome levels, and transport controls (Play/Pause, Stop, Loop, Tempo 25%–200%).
-  - `src/composables/useInputBus.ts`: Hardware-agnostic event bus for normalized `PracticeInputEvent` messages with recent event ring buffer, evaluation judgment annotation, and visual pad flash state.
-  - `src/composables/useKeyboardInput.ts`: Phase 1 `KeyboardInputAdapter` mapping `Space`, `S`, `D`, `F`, `J`, `K`, `L` and virtual pad clicks to GM drum MIDI notes (`src/constants/defaultKeyMap.ts`).
-  - `src/composables/useDrumSynth.ts`: Zero-latency Web Audio API drum/percussion synthesizer subscribed to `useInputBus` with adjustable volume and mute so keyboard, pad, and MIDI hits produce audible drum feedback without interrupting `alphaTab` playback.
-  - `src/composables/useHitEvaluation.ts`: Phase 2 timing & hit evaluation engine comparing `PracticeInputEvent` timestamps/ticks against active `alphaTab` track notes with Perfect (±55ms) / Good (±125ms) / Miss windows, passed-note detection, loop wrap handling, streak, and weighted accuracy.
+- **Core Composables & Registries:**
+  - `src/composables/useAlphaTab.ts`: Manages `AlphaTabApi` lifecycle (`shallowRef` + `markRaw`), built-in 2-track `alphaTex` 1.9 score (`src/constants/defaultScore.ts`), `.gp3`–`.gp8` drag-and-drop & file picker loading, track switching, viewer-agnostic `ScoreBarMeta[]` & `TargetScoreNote[]` extraction, per-track audio mixer (volume/mute/solo) + master/metronome levels, and transport controls (Play/Pause, Stop/Halt, Loop, Tempo 25%–200%).
+  - `src/composables/useViewerRegistry.ts`: Pluggable score viewer registry (`ScoreViewerDescriptor`, `ScoreViewerSessionProps` in `src/types/viewer.ts`) decoupling visualizers (`alphatab-sheet` and future step-grid / falling-note highway viewers) from `alphaTab`'s internal model.
+  - `src/composables/useInstrumentProfile.ts`: Reactive `InstrumentProfile` registry normalizing multi-zone MIDI aliases (`resolveMidiNote`), voice labels (`getNoteInfo`), and key/pad bindings across all input adapters and evaluation consumers.
+  - `src/composables/useInputRegistry.ts` & `src/composables/useInputBus.ts`: Pluggable `InputAdapterDescriptor` registry and hardware-agnostic event bus for normalized `PracticeInputEvent` messages.
+  - `src/composables/useKeyboardInput.ts`: Phase 1 `KeyboardInputAdapter` bound to `useInstrumentProfile` and registered with `useInputRegistry`.
+  - `src/composables/useDrumSynth.ts`: Zero-latency Web Audio API drum/percussion synthesizer subscribed to `useInputBus` with adjustable volume and mute.
+  - `src/composables/useHitEvaluation.ts`: Phase 2 timing & hit evaluation engine comparing `PracticeInputEvent` timestamps/ticks against active track notes with On Time (Green, ±55ms), Early (Purple, -150..-55ms), Late (Yellow/Orange, +55..+150ms), and Miss (Red) notehead circles and O(1) `resultsByNoteId` lookup.
 - **UI Components:** `TransportToolbar.vue`, `HitEvaluationHud.vue`, `ScoreViewport.vue`, `TriggerBar.vue`, `SoundSettingsDialog.vue`
 
 ## 3. Progressive Roadmap

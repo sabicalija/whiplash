@@ -152,6 +152,31 @@ Phase 2 requires evaluating incoming `PracticeInputEvent` messages against the a
 - **Positive:** Works identically for percussion and melodic tracks and across any input adapter (`keyboard`, `virtual-pad`, `debug`, and future `webmidi`).
 - **Positive:** Exposes `getEvaluationState()` and `resetEvaluation()` on `window.__TRAINER_DEBUG__` for deterministic automated verification.
 
+---
+
+## ADR-007: Pluggable Viewer, Input Adapter & Instrument Profile Registries
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Phase:** Architecture Decoupling (`v0.2.1`)
+
+### Context
+To support alternative track visualizations (e.g., Step-Sequencer Bar Grids, Falling-Note Drum Highways) that do not rely on `@coderline/alphatab`'s DOM notation surface, as well as future input adapters (WebMIDI, audio onset detection) and multi-zone instrument profiles (such as the Roland TD-27KV), remaining direct couplings needed to be extracted into explicit contracts and registries.
+
+### Decision
+1. **Engine-Agnostic Score Viewer Contract (`src/types/viewer.ts` & `src/composables/useViewerRegistry.ts`):**
+   - Added `ScoreBarMeta` (`index`, `number`, `startTick`, `endTick`, `durationTicks`, `timeSignatureNumerator`, `timeSignatureDenominator`) and enriched `TargetScoreNote` with `durationTicks` and `shortLabel` in `useAlphaTab.ts`.
+   - Added `resultsByNoteId` (`Record<string, HitEvaluationResult>`) in `useHitEvaluation.ts` for O(1) note evaluation lookup by any viewer.
+   - Defined `ScoreViewerDescriptor` and `ScoreViewerSessionProps` in `src/types/viewer.ts` and `useViewerRegistry.ts`, keeping the `alphaTab` notation surface mounted via `v-show` so switching to alternative viewers never interrupts `AlphaSynth` audio playback.
+2. **Reactive Instrument Profile Registry (`src/composables/useInstrumentProfile.ts`):**
+   - Extracted key/pad bindings, voice label lookup (`getNoteInfo`), and multi-zone MIDI alias normalization (`resolveMidiNote`, e.g., mapping Bass Drum `35 -> 36`, Rimshot/Electric Snare `40 -> 38`, Pedal Hi-Hat `44 -> 42`) out of static `defaultKeyMap.ts` imports into a reactive `InstrumentProfile` registry consumed by `useAlphaTab`, `useKeyboardInput`, and `useHitEvaluation`.
+3. **Pluggable Input Adapter Registry (`src/composables/useInputRegistry.ts`):**
+   - Added `InputAdapterDescriptor` (`id`, `name`, `kind`, `isAvailable`, `isConnected`, `isEnabled`) and `useInputRegistry.ts` so `useKeyboardInput` and future WebMIDI or audio onset adapters register through a single observable contract.
+
+### Consequences
+- **Positive:** Alternative viewers can render the entire track and live hit evaluations (Early/On-Time/Late/Miss) using only `bars`, `targetNotes`, `resultsByNoteId`, and `currentTick`.
+- **Positive:** Multi-zone e-drum presets and MIDI Learn mappings can be swapped at runtime via `useInstrumentProfile` without modifying the player or evaluation engine.
+
+
 
 
 
