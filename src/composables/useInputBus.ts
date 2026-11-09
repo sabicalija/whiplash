@@ -1,5 +1,6 @@
 import { ref, readonly } from 'vue'
 import type { PracticeInputEvent } from '../types/input'
+import type { HitJudgment, TimingStatus } from '../types/evaluation'
 
 type InputListener = (event: PracticeInputEvent) => void
 
@@ -56,6 +57,26 @@ function clearHistory(): void {
   recentEvents.value = []
 }
 
+function annotateLastEvent(
+  judgment: HitJudgment,
+  deltaMs: number | null,
+  timingStatus: TimingStatus = 'none',
+): void {
+  if (!lastEvent.value) {
+    return
+  }
+  const updated: PracticeInputEvent = {
+    ...lastEvent.value,
+    judgment,
+    timingStatus,
+    deltaMs,
+  }
+  lastEvent.value = updated
+  if (recentEvents.value.length > 0) {
+    recentEvents.value = [updated, ...recentEvents.value.slice(1)]
+  }
+}
+
 /**
  * Shared instrument-agnostic input bus (`useInputBus.ts`).
  * Decouples physical input adapters (Keyboard in Phase 1, WebMIDI in Phase 3)
@@ -70,5 +91,6 @@ export function useInputBus() {
     emit,
     onInput,
     clearHistory,
+    annotateLastEvent,
   }
 }

@@ -9,6 +9,8 @@ import {
 } from 'vue'
 import * as alphaTab from '@coderline/alphatab'
 import { DEFAULT_ALPHATEX_SCORE } from '../constants/defaultScore'
+import { getMidiNoteInfo } from '../constants/defaultKeyMap'
+import type { TargetScoreNote } from '../types/evaluation'
 
 export interface TrackSummary {
   index: number
@@ -41,6 +43,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
   const isPlayerReady = ref<boolean>(false)
   const isSoundFontLoaded = ref<boolean>(false)
   const isPlaying = ref<boolean>(false)
+  const isFinished = ref<boolean>(false)
   const isLooping = ref<boolean>(false)
   const tempoPercent = ref<number>(100)
   const baseTempoBpm = ref<number>(110)
@@ -53,10 +56,97 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
   const loadedFileName = ref<string>('Built-in Demo (alphaTex)')
   const tracks = ref<TrackSummary[]>([])
   const activeTrackIndex = ref<number>(0)
+  const targetNotes = ref<TargetScoreNote[]>([])
   const currentTick = ref<number>(0)
+  const endTick = ref<number>(0)
   const currentTimeMs = ref<number>(0)
   const endTimeMs = ref<number>(0)
+  const lastPositionPerfMs = ref<number>(0)
+  const renderVersion = ref<number>(0)
   const errorMessage = ref<string | null>(null)
+  let ignoringAutoStopReset = false
+
+  function parkCursorAtEnd(): void {
+    const api = apiRef.value as unknown as {
+      _cursorUpdateTick?: (
+        tick: number,
+        stop: boolean,
+        cursorSpeed: number,
+        shouldScroll?: boolean,
+        forceUpdate?: boolean,
+      ) => void
+    } | null
+    if (!api) {
+      return
+    }
+    const notes = targetNotes.value
+    const lastNoteTick = notes.length > 0 ? notes[notes.length - 1]!.tick : 0
+    const haltTick = Math.max(
+      lastNoteTick,
+      endTick.value > 0 ? endTick.value - 1 : 0,
+    )
+    window.requestAnimationFrame(() => {
+      if (!isFinished.value) {
+        return
+      }
+      api._cursorUpdateTick?.(haltTick, true, 1, false, true)
+    })
+  }
+
+  function extractTrackTargetNotes(
+    score: alphaTab.model.Score,
+    trackIndex: number,
+  ): TargetScoreNote[] {
+    const track = score.tracks[trackIndex]
+    if (!track) {
+      return []
+    }
+    const isPercussion =
+      track.staves.some((staff) => staff.isPercussion) ||
+      track.playbackInfo.primaryChannel === 9 ||
+      track.playbackInfo.secondaryChannel === 9
+
+    const notes: TargetScoreNote[] = []
+    const seenAtTick = new Set<string>()
+
+    for (const staff of track.staves) {
+      for (const bar of staff.bars) {
+        for (const voice of bar.voices) {
+          for (const beat of voice.beats) {
+            if (beat.isRest || beat.notes.length === 0) {
+              continue
+            }
+            const tick = beat.absolutePlaybackStart
+            for (let nIdx = 0; nIdx < beat.notes.length; nIdx++) {
+              const note = beat.notes[nIdx]
+              if (!note || note.isTieDestination) {
+                continue
+              }
+              const midiNote = note.realValue
+              const dedupeKey = `${tick}:${midiNote}`
+              if (seenAtTick.has(dedupeKey)) {
+                continue
+              }
+              seenAtTick.add(dedupeKey)
+              const info = getMidiNoteInfo(midiNote, isPercussion)
+              notes.push({
+                id: `${bar.index}:${beat.index}:${nIdx}:${midiNote}`,
+                tick,
+                midiNote,
+                barIndex: bar.index,
+                beatIndex: beat.index,
+                label: info.label,
+                keyHint: info.keyHint,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    notes.sort((a, b) => a.tick - b.tick || a.midiNote - b.midiNote)
+    return notes
+  }
 
   function extractTrackSummaries(score: alphaTab.model.Score): TrackSummary[] {
     return score.tracks.map((track, idx) => {
@@ -144,12 +234,22 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
       return
     }
     activeTrackIndex.value = trackIndex
+    targetNotes.value = extractTrackTargetNotes(rawScore, trackIndex)
     api.renderTracks([markRaw(targetTrack)])
   }
 
   function togglePlayPause(): void {
     const api = apiRef.value
     if (!api) {
+      return
+    }
+    if (isFinished.value) {
+      ignoringAutoStopReset = false
+      isFinished.value = false
+      currentTick.value = 0
+      currentTimeMs.value = 0
+      api.tickPosition = 0
+      api.play()
       return
     }
     api.playPause()
@@ -160,6 +260,15 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     if (!api) {
       return
     }
+    if (isPlaying.value) {
+      // Halt playback in place so the user can analyze their hits on the score
+      api.pause()
+      isPlaying.value = false
+      return
+    }
+    // When already halted/paused, rewind cursor to the beginning of the score
+    ignoringAutoStopReset = false
+    isFinished.value = false
     api.stop()
     isPlaying.value = false
     currentTick.value = 0
@@ -261,6 +370,132 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     syncAudioMixToEngine()
   }
 
+  function resolveHitCoordinates(
+    tick: number,
+    midiNote: number,
+    targetNoteId?: string,
+  ): {
+    x: number
+    barTopY: number
+    noteHeadX?: number
+    noteHeadY?: number
+  } | null {
+    const api = apiRef.value
+    const lookup = api?.boundsLookup
+    if (!lookup || !rawScore) {
+      return null
+    }
+    const track = rawScore.tracks[activeTrackIndex.value]
+    if (!track) {
+      return null
+    }
+
+    let matchedBeat: alphaTab.model.Beat | null = null
+    let closestBeat: alphaTab.model.Beat | null = null
+    let closestTickDist = Infinity
+
+    let expectedBarIdx = -1
+    let expectedBeatIdx = -1
+    if (targetNoteId) {
+      const parts = targetNoteId.split(':')
+      expectedBarIdx = Number(parts[0])
+      expectedBeatIdx = Number(parts[1])
+    }
+
+    for (const staff of track.staves) {
+      for (const bar of staff.bars) {
+        for (const voice of bar.voices) {
+          for (const beat of voice.beats) {
+            if (beat.isRest && beat.notes.length === 0) {
+              continue
+            }
+            if (
+              expectedBarIdx >= 0 &&
+              bar.index === expectedBarIdx &&
+              beat.index === expectedBeatIdx
+            ) {
+              matchedBeat = beat
+              break
+            }
+            const start = beat.absolutePlaybackStart
+            const dur = Math.max(1, beat.playbackDuration)
+            if (tick >= start && tick < start + dur) {
+              if (!closestBeat) {
+                closestBeat = beat
+                closestTickDist = 0
+              }
+            } else {
+              const dist = Math.abs(tick - start)
+              if (dist < closestTickDist) {
+                closestTickDist = dist
+                closestBeat = beat
+              }
+            }
+          }
+          if (matchedBeat) break
+        }
+        if (matchedBeat) break
+      }
+      if (matchedBeat) break
+    }
+
+    const targetBeat = matchedBeat ?? closestBeat
+    if (!targetBeat) {
+      return null
+    }
+
+    const beatBounds = lookup.findBeat(targetBeat)
+    if (!beatBounds) {
+      return null
+    }
+
+    const masterBarBounds = beatBounds.barBounds.masterBarBounds
+    const barVisual = masterBarBounds.visualBounds
+
+    if (matchedBeat) {
+      let noteHeadX: number | undefined
+      let noteHeadY: number | undefined
+      if (beatBounds.notes) {
+        for (const nb of beatBounds.notes) {
+          if (nb.note.realValue === midiNote && nb.noteHeadBounds) {
+            noteHeadX = Math.round(nb.noteHeadBounds.x + nb.noteHeadBounds.w / 2)
+            noteHeadY = Math.round(nb.noteHeadBounds.y + nb.noteHeadBounds.h / 2)
+            break
+          }
+        }
+      }
+      return {
+        x: Math.round(beatBounds.onNotesX),
+        barTopY: Math.round(barVisual.y),
+        noteHeadX,
+        noteHeadY,
+      }
+    }
+
+    // Interpolate X position within the beat for off-beat or wrong-note hits
+    let nextBeatX = beatBounds.realBounds.x + beatBounds.realBounds.w
+    if (targetBeat.nextBeat) {
+      const nextBounds = lookup.findBeat(targetBeat.nextBeat)
+      if (
+        nextBounds &&
+        nextBounds.barBounds.masterBarBounds.staffSystemBounds ===
+          masterBarBounds.staffSystemBounds
+      ) {
+        nextBeatX = nextBounds.onNotesX
+      }
+    }
+
+    const beatStart = targetBeat.absolutePlaybackStart
+    const beatDur = Math.max(1, targetBeat.playbackDuration)
+    const ratio = Math.max(0, Math.min(1, (tick - beatStart) / beatDur))
+    const interpolatedX = beatBounds.onNotesX + (nextBeatX - beatBounds.onNotesX) * ratio
+
+    return {
+      x: Math.round(interpolatedX),
+      barTopY: Math.round(barVisual.y),
+    }
+  }
+
   onMounted(() => {
     const el = containerRef.value
     if (!el) {
@@ -271,6 +506,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     const settings = new alphaTab.Settings()
     settings.core.fontDirectory = `${baseUrl}font/`
     settings.core.useWorkers = true
+    settings.core.includeNoteBounds = true
     settings.display.layoutMode = alphaTab.LayoutMode.Page
     settings.display.staveProfile = alphaTab.StaveProfile.Default
     settings.player.enablePlayer = true
@@ -283,6 +519,8 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
 
     instance.scoreLoaded.on((score) => {
       rawScore = markRaw(score)
+      ignoringAutoStopReset = false
+      isFinished.value = false
       scoreTitle.value = score.title || loadedFileName.value
       scoreSubtitle.value = score.subTitle || ''
       scoreArtist.value = score.artist || ''
@@ -291,10 +529,16 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
 
       const renderedTrackIdx = instance.tracks?.[0]?.index ?? 0
       activeTrackIndex.value = renderedTrackIdx
+      targetNotes.value = extractTrackTargetNotes(score, renderedTrackIdx)
     })
 
     instance.renderFinished.on(() => {
       isReady.value = true
+      renderVersion.value += 1
+    })
+
+    instance.postRenderFinished.on(() => {
+      renderVersion.value += 1
     })
 
     instance.soundFontLoaded.on(() => {
@@ -308,14 +552,53 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
       syncAudioMixToEngine()
     })
 
+    instance.playerFinished.on(() => {
+      if (!isLooping.value) {
+        ignoringAutoStopReset = true
+        isPlaying.value = false
+        isFinished.value = true
+        if (endTick.value > 0) {
+          currentTick.value = endTick.value
+        }
+        if (endTimeMs.value > 0) {
+          currentTimeMs.value = endTimeMs.value
+        }
+        parkCursorAtEnd()
+      }
+    })
+
     instance.playerStateChanged.on((args) => {
+      if (
+        ignoringAutoStopReset &&
+        args.state === alphaTab.synth.PlayerState.Paused
+      ) {
+        ignoringAutoStopReset = false
+        isPlaying.value = false
+        isFinished.value = true
+        parkCursorAtEnd()
+        return
+      }
       isPlaying.value = args.state === alphaTab.synth.PlayerState.Playing
+      if (isPlaying.value) {
+        isFinished.value = false
+      }
     })
 
     instance.playerPositionChanged.on((args) => {
+      if (ignoringAutoStopReset && args.currentTick === 0) {
+        parkCursorAtEnd()
+        return
+      }
+      if (isFinished.value && !ignoringAutoStopReset && args.isSeek) {
+        isFinished.value = false
+      }
       currentTick.value = args.currentTick
       currentTimeMs.value = Math.round(args.currentTime)
       endTimeMs.value = Math.round(args.endTime)
+      if (args.endTick > 0) {
+        endTick.value = args.endTick
+      }
+      lastPositionPerfMs.value = performance.now()
     })
 
     instance.error.on((err) => {
@@ -341,6 +624,7 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     isPlayerReady: readonly(isPlayerReady),
     isSoundFontLoaded: readonly(isSoundFontLoaded),
     isPlaying: readonly(isPlaying),
+    isFinished: readonly(isFinished),
     isLooping: readonly(isLooping),
     tempoPercent: readonly(tempoPercent),
     baseTempoBpm: readonly(baseTempoBpm),
@@ -353,9 +637,13 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     loadedFileName: readonly(loadedFileName),
     tracks: readonly(tracks),
     activeTrackIndex: readonly(activeTrackIndex),
+    targetNotes: readonly(targetNotes),
     currentTick: readonly(currentTick),
+    endTick: readonly(endTick),
     currentTimeMs: readonly(currentTimeMs),
     endTimeMs: readonly(endTimeMs),
+    lastPositionPerfMs: readonly(lastPositionPerfMs),
+    renderVersion: readonly(renderVersion),
     errorMessage: readonly(errorMessage),
     loadDefaultScore,
     loadGpFile,
@@ -371,5 +659,6 @@ export function useAlphaTab(containerRef: Ref<HTMLElement | null>) {
     toggleTrackMute,
     toggleTrackSolo,
     resetAudioMix,
+    resolveHitCoordinates,
   }
 }

@@ -1,3 +1,10 @@
+import type {
+  EvaluationStats,
+  HitEvaluationResult,
+  HitJudgment,
+  TimingStatus,
+} from './evaluation'
+
 export interface PracticeInputEvent {
   /** High-resolution timestamp from performance.now() in milliseconds */
   timestamp: number
@@ -11,6 +18,12 @@ export interface PracticeInputEvent {
   rawCode: string
   /** Human-readable drum or note name */
   label?: string
+  /** Optional Phase 2 evaluation judgment if triggered during playback */
+  judgment?: HitJudgment
+  /** Optional Phase 2 timing status ('on-time', 'early', 'late', 'none') */
+  timingStatus?: TimingStatus
+  /** Optional Phase 2 timing offset in ms (negative = early, positive = late) */
+  deltaMs?: number | null
 }
 
 export interface KeyPadBinding {
@@ -43,4 +56,10 @@ export interface TrainerDebugApi {
   emitInput: (partial?: Partial<PracticeInputEvent>) => PracticeInputEvent
   getPlayerState: () => PlayerDebugState
   getRecentInputs: () => PracticeInputEvent[]
+  getEvaluationState: () => {
+    stats: EvaluationStats
+    lastResult: HitEvaluationResult | null
+    targetNoteCount: number
+  }
+  resetEvaluation: () => void
 }
