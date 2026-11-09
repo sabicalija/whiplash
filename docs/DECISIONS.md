@@ -101,4 +101,25 @@ As the repository is initialized and connected to its remote (`origin`), clear v
 - **Positive:** Sub-2ms drum audio response on every key press or pad click that mixes seamlessly alongside active `alphaTab` score playback.
 - **Positive:** Hardware-agnostic by listening to `useInputBus.ts`.
 
+---
+
+## ADR-005: Sound & Track Mixer Dialog (`SoundSettingsDialog.vue`)
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Phase:** Phase 1 Refinement (Multi-Track Audio Mixer)
+
+### Context
+Users practicing along with multi-track scores need independent volume, mute, and solo controls for each score track (e.g., muting or lowering the score's `Studio Drum Kit` track while keeping the `Electric Finger Bass` backing track audible), as well as independent level controls for the live keyboard/pad drum synthesizer, score master volume, and metronome click.
+
+### Decision
+1. **Engine Mixer Controls in `useAlphaTab.ts` & `useDrumSynth.ts`:**
+   - Extended `TrackSummary` with `volumePercent`, `isMuted`, and `isSolo`, and added `setTrackVolume`, `toggleTrackMute`, `toggleTrackSolo`, `setMasterVolume`, `setMetronomeVolume`, and `resetAudioMix` in `useAlphaTab.ts` (wrapping `alphaTab.model.Track` references with `markRaw()` before passing to `api.changeTrackVolume` / `changeTrackMute` / `changeTrackSolo`).
+   - Added `volumePercent` (`0%`–`150%`) and `setVolumePercent` to `useDrumSynth.ts`.
+2. **Accessible Modal Mixer (`src/components/SoundSettingsDialog.vue`):**
+   - Built a native `<dialog closedby="any">` modal opened via `.showModal()` from a `🎛 Sound Settings` button in `TransportToolbar.vue`, complete with a `<form method="dialog">` close action and a backdrop-click fallback for browsers without native `closedBy` support.
+
+### Consequences
+- **Positive:** Users can balance or mute any score track (such as muting the recorded drum track to hear only their own live drumming over the bass track) and toggle the built-in metronome click.
+
+
 

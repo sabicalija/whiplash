@@ -13,11 +13,11 @@ Whiplash is an extensible, instrument-agnostic **Music & Percussion Practice Tra
 - **Status:** **Phase 1 Completed & Verified** (Core alphaTab Player & Keyboard Input Adapter).
 - **Entry Points:** `src/main.ts`, `src/App.vue`
 - **Core Composables:**
-  - `src/composables/useAlphaTab.ts`: Manages `AlphaTabApi` lifecycle (`shallowRef` + `markRaw`), built-in 2-track `alphaTex` 1.9 score (`src/constants/defaultScore.ts`), `.gp3`–`.gp8` drag-and-drop & file picker loading, track switching, and transport controls (Play/Pause, Stop, Loop, Tempo 25%–200%).
+  - `src/composables/useAlphaTab.ts`: Manages `AlphaTabApi` lifecycle (`shallowRef` + `markRaw`), built-in 2-track `alphaTex` 1.9 score (`src/constants/defaultScore.ts`), `.gp3`–`.gp8` drag-and-drop & file picker loading, track switching, per-track audio mixer (volume/mute/solo) + master/metronome levels, and transport controls (Play/Pause, Stop, Loop, Tempo 25%–200%).
   - `src/composables/useInputBus.ts`: Hardware-agnostic event bus for normalized `PracticeInputEvent` messages with recent event ring buffer and visual pad flash state.
   - `src/composables/useKeyboardInput.ts`: Phase 1 `KeyboardInputAdapter` mapping `Space`, `S`, `D`, `F`, `J`, `K`, `L` and virtual pad clicks to GM drum MIDI notes (`src/constants/defaultKeyMap.ts`).
-  - `src/composables/useDrumSynth.ts`: Zero-latency Web Audio API drum/percussion synthesizer subscribed to `useInputBus` so keyboard, pad, and MIDI hits produce audible drum feedback without interrupting `alphaTab` playback.
-- **UI Components:** `TransportToolbar.vue`, `ScoreViewport.vue`, `TriggerBar.vue`
+  - `src/composables/useDrumSynth.ts`: Zero-latency Web Audio API drum/percussion synthesizer subscribed to `useInputBus` with adjustable volume and mute so keyboard, pad, and MIDI hits produce audible drum feedback without interrupting `alphaTab` playback.
+- **UI Components:** `TransportToolbar.vue`, `ScoreViewport.vue`, `TriggerBar.vue`, `SoundSettingsDialog.vue`
 
 ## 3. Progressive Roadmap
 - [x] **Phase 1: Core alphaTab Player & Keyboard Input Adapter** (Built-in demo tab, `.gp` file loader, track selector for percussion or melodic tracks, playback/tempo/loop controls, and mapped PC keyboard input with visual trigger feedback).
