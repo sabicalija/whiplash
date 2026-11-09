@@ -10,18 +10,19 @@ Whiplash is an extensible, instrument-agnostic **Music & Percussion Practice Tra
 - **Notation & Synth Engine:** `@coderline/alphatab`
 
 ## 2. Current Project State
-- **Status:** **Phase 1 Completed & Verified** (Core alphaTab Player & Keyboard Input Adapter).
+- **Status:** **Phase 1 & Phase 2 Completed & Verified** (Core alphaTab Player, Keyboard Input Adapter, Live Drum Synth, Audio Mixer & Hit/Timing Evaluation Engine).
 - **Entry Points:** `src/main.ts`, `src/App.vue`
 - **Core Composables:**
-  - `src/composables/useAlphaTab.ts`: Manages `AlphaTabApi` lifecycle (`shallowRef` + `markRaw`), built-in 2-track `alphaTex` 1.9 score (`src/constants/defaultScore.ts`), `.gp3`–`.gp8` drag-and-drop & file picker loading, track switching, per-track audio mixer (volume/mute/solo) + master/metronome levels, and transport controls (Play/Pause, Stop, Loop, Tempo 25%–200%).
-  - `src/composables/useInputBus.ts`: Hardware-agnostic event bus for normalized `PracticeInputEvent` messages with recent event ring buffer and visual pad flash state.
+  - `src/composables/useAlphaTab.ts`: Manages `AlphaTabApi` lifecycle (`shallowRef` + `markRaw`), built-in 2-track `alphaTex` 1.9 score (`src/constants/defaultScore.ts`), `.gp3`–`.gp8` drag-and-drop & file picker loading, track switching, active track `TargetScoreNote` extraction, per-track audio mixer (volume/mute/solo) + master/metronome levels, and transport controls (Play/Pause, Stop, Loop, Tempo 25%–200%).
+  - `src/composables/useInputBus.ts`: Hardware-agnostic event bus for normalized `PracticeInputEvent` messages with recent event ring buffer, evaluation judgment annotation, and visual pad flash state.
   - `src/composables/useKeyboardInput.ts`: Phase 1 `KeyboardInputAdapter` mapping `Space`, `S`, `D`, `F`, `J`, `K`, `L` and virtual pad clicks to GM drum MIDI notes (`src/constants/defaultKeyMap.ts`).
   - `src/composables/useDrumSynth.ts`: Zero-latency Web Audio API drum/percussion synthesizer subscribed to `useInputBus` with adjustable volume and mute so keyboard, pad, and MIDI hits produce audible drum feedback without interrupting `alphaTab` playback.
-- **UI Components:** `TransportToolbar.vue`, `ScoreViewport.vue`, `TriggerBar.vue`, `SoundSettingsDialog.vue`
+  - `src/composables/useHitEvaluation.ts`: Phase 2 timing & hit evaluation engine comparing `PracticeInputEvent` timestamps/ticks against active `alphaTab` track notes with Perfect (±55ms) / Good (±125ms) / Miss windows, passed-note detection, loop wrap handling, streak, and weighted accuracy.
+- **UI Components:** `TransportToolbar.vue`, `HitEvaluationHud.vue`, `ScoreViewport.vue`, `TriggerBar.vue`, `SoundSettingsDialog.vue`
 
 ## 3. Progressive Roadmap
 - [x] **Phase 1: Core alphaTab Player & Keyboard Input Adapter** (Built-in demo tab, `.gp` file loader, track selector for percussion or melodic tracks, playback/tempo/loop controls, and mapped PC keyboard input with visual trigger feedback).
-- [ ] **Phase 2: Timing & Hit Evaluation Engine** (Comparing `PracticeInputEvent` timestamps against active `alphaTab` beat ticks with Perfect/Good/Miss windows and live accuracy HUD).
+- [x] **Phase 2: Timing & Hit Evaluation Engine** (Comparing `PracticeInputEvent` timestamps against active `alphaTab` beat ticks with Perfect/Good/Miss windows and live accuracy HUD).
 - [ ] **Phase 3: Generic WebMIDI & Interactive Input Mapper** (Connecting any USB-MIDI device, MIDI Learn UI to bind any incoming MIDI note or key to target score notes).
 - [ ] **Phase 4: Instrument Profiles & Multi-Zone Presets** (Plug-and-play presets starting with Roland TD-27KV bow/edge/rim normalization, plus profiles for other e-drums and melodic instruments).
 

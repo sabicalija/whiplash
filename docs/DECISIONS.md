@@ -121,5 +121,37 @@ Users practicing along with multi-track scores need independent volume, mute, an
 ### Consequences
 - **Positive:** Users can balance or mute any score track (such as muting the recorded drum track to hear only their own live drumming over the bass track) and toggle the built-in metronome click.
 
+---
+
+## ADR-006: Phase 2 Implementation — Timing & Hit Evaluation Engine (`useHitEvaluation.ts` & `HitEvaluationHud.vue`)
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Phase:** Phase 2 (Timing & Hit Evaluation Engine — `v0.2.0`)
+
+### Context
+Phase 2 requires evaluating incoming `PracticeInputEvent` messages against the active `alphaTab` score track in real time across variable playback speeds (`25%`–`200%`), chords/simultaneous drum hits (such as Kick `36` + Hi-Hat `42` on the same beat), and loop wrap-arounds.
+
+### Decision
+1. **Active Track Target Note Extraction (`useAlphaTab.ts`):**
+   - On `scoreLoaded` and `selectTrack`, `extractTrackTargetNotes` traverses `staff -> bar -> voice -> beat -> note`, skipping rests and tied destination notes, and extracts sorted `TargetScoreNote` records using `beat.absolutePlaybackStart` (960 ticks/quarter note) and `note.realValue` (which normalizes both GP7 percussion articulations and melodic pitches to MIDI note numbers).
+2. **Tempo-Normalized Millisecond Window Evaluation (`useHitEvaluation.ts`):**
+   - Converts tick deltas (`activeTick - target.tick`) to real-time milliseconds at the effective BPM (`baseTempoBpm * tempoPercent / 100`), with sub-frame tick interpolation from `lastPositionPerfMs`.
+   - Applies standard judgment tiers and directional `TimingStatus` within a `±180 ms` candidate window:
+     - **On Time (`Perfect`):** `|deltaMs| <= 55 ms`
+     - **Early / Late (`Good`):** `55 ms < |deltaMs| <= 125 ms`
+     - **Too Early / Too Late (`Miss`):** `125 ms < |deltaMs| <= 180 ms`
+     - **Off-Beat / Wrong Note / Passed (`Miss`):** no matching note within `±180 ms` or unplayed note passed by `>145 ms`.
+   - Automatically clears per-loop evaluated note locks (`evaluatedNoteIds`) and bar markings (`passResults`) only when `isLooping` wraps backward during active looping or when starting a new playback pass from tick `0`.
+   - When non-looping playback reaches the end of the score (`playerFinished`) or when the user presses **Stop** during playback, the player halts in place (`isFinished = true` / `parkCursorAtEnd()`) instead of rewinding to tick `0`, preserving all over-the-bar precision markings so the user can analyze their performance.
+   - Leaves paused/stopped state in **Free Play** mode so users can test pads without accumulating misses.
+3. **Live Accuracy & Timing HUD (`HitEvaluationHud.vue`) & Over-the-Bar Score Overlay (`ScoreViewport.vue`):**
+   - Displays live judgment pill (`PERFECT`, `GOOD`, `MISS`, `FREE PLAY`), signed timing error (`-Early` / `+Late` ms), visual center-zero offset gauge, upcoming beat note & key hints (`Next:`), weighted accuracy percentage, streak/best streak, and hit breakdown counters.
+   - Enabled `settings.core.includeNoteBounds = true` and added `resolveHitCoordinates()` in `useAlphaTab.ts` using `api.boundsLookup` (`NoteBounds.noteHeadBounds`) to render color-coded precision circles directly around each evaluated notehead on the score surface: **Purple** (`#9333ea`) for Early, **Green** (`#059669`) for On Time, **Yellow/Orange** (`#d97706`) for Late, and **Red** (`#dc2626`) for Miss.
+
+### Consequences
+- **Positive:** Works identically for percussion and melodic tracks and across any input adapter (`keyboard`, `virtual-pad`, `debug`, and future `webmidi`).
+- **Positive:** Exposes `getEvaluationState()` and `resetEvaluation()` on `window.__TRAINER_DEBUG__` for deterministic automated verification.
+
+
 
 
