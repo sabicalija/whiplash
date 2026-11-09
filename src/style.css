@@ -452,6 +452,19 @@ body {
   gap: 0.65rem;
 }
 
+.dock-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  padding: 0.22rem 0.6rem;
+  font-size: 0.74rem;
+  border-radius: 999px;
+}
+
 .dock-title {
   margin: 0;
   font-size: 0.86rem;

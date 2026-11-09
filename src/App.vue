@@ -6,6 +6,7 @@ import TriggerBar from './components/TriggerBar.vue'
 import { useAlphaTab } from './composables/useAlphaTab'
 import { useInputBus } from './composables/useInputBus'
 import { useKeyboardInput } from './composables/useKeyboardInput'
+import { useDrumSynth } from './composables/useDrumSynth'
 import type { KeyPadBinding, PracticeInputEvent } from './types/input'
 
 const scoreViewportRef = ref<InstanceType<typeof ScoreViewport> | null>(null)
@@ -16,6 +17,7 @@ const alphaTabContainerRef = computed<HTMLElement | null>(
 const player = useAlphaTab(alphaTabContainerRef)
 const inputBus = useInputBus()
 const keyboard = useKeyboardInput()
+const drumSynth = useDrumSynth()
 
 function handlePadTrigger(binding: KeyPadBinding): void {
   keyboard.triggerBinding(binding, 'virtual-pad', 110)
@@ -114,8 +116,10 @@ onBeforeUnmount(() => {
       :last-event="inputBus.lastEvent.value"
       :recent-events="inputBus.recentEvents.value"
       :total-event-count="inputBus.totalEventCount.value"
+      :is-pad-audio-enabled="drumSynth.isAudioEnabled.value"
       @trigger-pad="handlePadTrigger"
       @clear-log="inputBus.clearHistory"
+      @toggle-pad-audio="drumSynth.toggleAudio"
     />
   </div>
 </template>

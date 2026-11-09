@@ -7,11 +7,13 @@ defineProps<{
   lastEvent: PracticeInputEvent | null
   recentEvents: readonly PracticeInputEvent[]
   totalEventCount: number
+  isPadAudioEnabled: boolean
 }>()
 
 const emit = defineEmits<{
   triggerPad: [binding: KeyPadBinding]
   clearLog: []
+  togglePadAudio: []
 }>()
 </script>
 
@@ -23,6 +25,7 @@ const emit = defineEmits<{
     :data-last-note="lastEvent?.note ?? ''"
     :data-last-code="lastEvent?.rawCode ?? ''"
     :data-input-count="totalEventCount"
+    :data-pad-audio-enabled="String(isPadAudioEnabled)"
   >
     <div class="pads-column">
       <div class="dock-header">
@@ -33,14 +36,27 @@ const emit = defineEmits<{
             <code>J</code>, <code>K</code>, <code>L</code>) or click a pad
           </span>
         </div>
-        <div
-          v-if="lastEvent"
-          class="last-hit-pill"
-          data-testid="last-hit-indicator"
-        >
-          Last Trigger:
-          <strong>{{ lastEvent.label ?? `MIDI ${lastEvent.note}` }}</strong>
-          <span>(Note {{ lastEvent.note }} · {{ lastEvent.rawCode }} · vel {{ lastEvent.velocity }})</span>
+        <div class="dock-header-actions">
+          <div
+            v-if="lastEvent"
+            class="last-hit-pill"
+            data-testid="last-hit-indicator"
+          >
+            Last Trigger:
+            <strong>{{ lastEvent.label ?? `MIDI ${lastEvent.note}` }}</strong>
+            <span>(Note {{ lastEvent.note }} · {{ lastEvent.rawCode }} · vel {{ lastEvent.velocity }})</span>
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm"
+            :class="{ 'btn-active': isPadAudioEnabled }"
+            :aria-pressed="isPadAudioEnabled"
+            data-testid="toggle-pad-audio"
+            @click="emit('togglePadAudio')"
+          >
+            <span aria-hidden="true">{{ isPadAudioEnabled ? '🔊' : '🔇' }}</span>
+            <span>{{ isPadAudioEnabled ? 'Pad Audio On' : 'Pad Audio Muted' }}</span>
+          </button>
         </div>
       </div>
 
