@@ -27,6 +27,7 @@ const emit = defineEmits<{
   selectTrack: [index: number]
   uploadFile: [file: File]
   resetDemo: []
+  openSoundSettings: []
 }>()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -193,21 +194,30 @@ function onFileSelected(event: Event): void {
         <button
           type="button"
           class="btn"
+          data-testid="open-sound-settings"
+          @click="emit('openSoundSettings')"
+        >
+          <span aria-hidden="true">🎛</span>
+          <span>Sound Settings</span>
+        </button>
+        <button
+          type="button"
+          class="btn"
           data-testid="open-file-button"
-          title="Load Guitar Pro (.gp3 - .gp8) file"
           @click="openFilePicker"
         >
-          📂 Load .GP
+          <span aria-hidden="true">📂</span>
+          <span>Load .GP</span>
         </button>
         <button
           v-if="sourceType === 'gp-file'"
           type="button"
           class="btn"
           data-testid="reset-demo-button"
-          title="Return to built-in percussion demo groove"
           @click="emit('resetDemo')"
         >
-          ↺ Demo Groove
+          <span aria-hidden="true">↺</span>
+          <span>Demo Groove</span>
         </button>
       </div>
     </div>

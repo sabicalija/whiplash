@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import TransportToolbar from './components/TransportToolbar.vue'
 import ScoreViewport from './components/ScoreViewport.vue'
 import TriggerBar from './components/TriggerBar.vue'
+import SoundSettingsDialog from './components/SoundSettingsDialog.vue'
 import { useAlphaTab } from './composables/useAlphaTab'
 import { useInputBus } from './composables/useInputBus'
 import { useKeyboardInput } from './composables/useKeyboardInput'
@@ -10,6 +11,7 @@ import { useDrumSynth } from './composables/useDrumSynth'
 import type { KeyPadBinding, PracticeInputEvent } from './types/input'
 
 const scoreViewportRef = ref<InstanceType<typeof ScoreViewport> | null>(null)
+const soundSettingsRef = ref<InstanceType<typeof SoundSettingsDialog> | null>(null)
 const alphaTabContainerRef = computed<HTMLElement | null>(
   () => scoreViewportRef.value?.viewportElement ?? null,
 )
@@ -21,6 +23,16 @@ const drumSynth = useDrumSynth()
 
 function handlePadTrigger(binding: KeyPadBinding): void {
   keyboard.triggerBinding(binding, 'virtual-pad', 110)
+}
+
+function openSoundSettings(): void {
+  soundSettingsRef.value?.open()
+}
+
+function handleResetAllAudio(): void {
+  player.resetAudioMix()
+  drumSynth.setAudioEnabled(true)
+  drumSynth.setVolumePercent(100)
 }
 
 onMounted(() => {
@@ -100,6 +112,7 @@ onBeforeUnmount(() => {
       @select-track="player.selectTrack"
       @upload-file="player.loadGpFile"
       @reset-demo="player.loadDefaultScore"
+      @open-sound-settings="openSoundSettings"
     />
 
     <ScoreViewport
@@ -120,6 +133,24 @@ onBeforeUnmount(() => {
       @trigger-pad="handlePadTrigger"
       @clear-log="inputBus.clearHistory"
       @toggle-pad-audio="drumSynth.toggleAudio"
+    />
+
+    <SoundSettingsDialog
+      ref="soundSettingsRef"
+      :tracks="player.tracks.value"
+      :active-track-index="player.activeTrackIndex.value"
+      :master-volume-percent="player.masterVolumePercent.value"
+      :metronome-volume-percent="player.metronomeVolumePercent.value"
+      :pad-volume-percent="drumSynth.volumePercent.value"
+      :is-pad-audio-enabled="drumSynth.isAudioEnabled.value"
+      @update-master-volume="player.setMasterVolume"
+      @update-metronome-volume="player.setMetronomeVolume"
+      @update-pad-volume="drumSynth.setVolumePercent"
+      @toggle-pad-audio="drumSynth.toggleAudio"
+      @update-track-volume="(idx, vol) => player.setTrackVolume(idx, vol)"
+      @toggle-track-mute="player.toggleTrackMute"
+      @toggle-track-solo="player.toggleTrackSolo"
+      @reset-all="handleResetAllAudio"
     />
   </div>
 </template>
