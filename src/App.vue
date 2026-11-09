@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import TransportToolbar from './components/TransportToolbar.vue'
+import HitEvaluationHud from './components/HitEvaluationHud.vue'
 import ScoreViewport from './components/ScoreViewport.vue'
 import TriggerBar from './components/TriggerBar.vue'
 import SoundSettingsDialog from './components/SoundSettingsDialog.vue'
@@ -8,7 +9,9 @@ import { useAlphaTab } from './composables/useAlphaTab'
 import { useInputBus } from './composables/useInputBus'
 import { useKeyboardInput } from './composables/useKeyboardInput'
 import { useDrumSynth } from './composables/useDrumSynth'
+import { useHitEvaluation } from './composables/useHitEvaluation'
 import type { KeyPadBinding, PracticeInputEvent } from './types/input'
+import type { BarHitOverlayMarker } from './types/evaluation'
 
 const scoreViewportRef = ref<InstanceType<typeof ScoreViewport> | null>(null)
 const soundSettingsRef = ref<InstanceType<typeof SoundSettingsDialog> | null>(null)
@@ -20,6 +23,56 @@ const player = useAlphaTab(alphaTabContainerRef)
 const inputBus = useInputBus()
 const keyboard = useKeyboardInput()
 const drumSynth = useDrumSynth()
+const evaluation = useHitEvaluation({
+  isPlaying: player.isPlaying,
+  isLooping: player.isLooping,
+  isFinished: player.isFinished,
+  currentTick: player.currentTick,
+  lastPositionPerfMs: player.lastPositionPerfMs,
+  baseTempoBpm: player.baseTempoBpm,
+  tempoPercent: player.tempoPercent,
+  targetNotes: player.targetNotes,
+})
+
+const barHitMarkers = computed<BarHitOverlayMarker[]>(() => {
+  void player.renderVersion.value
+  const markers: BarHitOverlayMarker[] = []
+
+  for (const res of evaluation.passResults.value) {
+    if (!res.targetNoteId) {
+      continue
+    }
+    const coords = player.resolveHitCoordinates(
+      res.tick,
+      res.midiNote,
+      res.targetNoteId,
+    )
+    if (
+      !coords ||
+      coords.noteHeadX === undefined ||
+      coords.noteHeadY === undefined
+    ) {
+      continue
+    }
+
+    markers.push({
+      id: res.id,
+      judgment: res.judgment,
+      timingStatus: res.timingStatus,
+      shortLabel: res.shortLabel,
+      label: res.label,
+      deltaMs: res.deltaMs,
+      missReason: res.missReason,
+      x: coords.noteHeadX,
+      barTopY: coords.barTopY,
+      stackIndex: 0,
+      noteHeadX: coords.noteHeadX,
+      noteHeadY: coords.noteHeadY,
+    })
+  }
+
+  return markers
+})
 
 function handlePadTrigger(binding: KeyPadBinding): void {
   keyboard.triggerBinding(binding, 'virtual-pad', 110)
@@ -66,6 +119,18 @@ onMounted(() => {
       getRecentInputs() {
         return inputBus.recentEvents.value.map((ev) => ({ ...ev }))
       },
+      getEvaluationState() {
+        return {
+          stats: { ...evaluation.stats.value },
+          lastResult: evaluation.lastResult.value
+            ? { ...evaluation.lastResult.value }
+            : null,
+          targetNoteCount: player.targetNotes.value.length,
+        }
+      },
+      resetEvaluation() {
+        evaluation.resetStats()
+      },
     }
   }
 })
@@ -95,6 +160,7 @@ onBeforeUnmount(() => {
       :is-player-ready="player.isPlayerReady.value"
       :is-sound-font-loaded="player.isSoundFontLoaded.value"
       :is-playing="player.isPlaying.value"
+      :is-finished="player.isFinished.value"
       :is-looping="player.isLooping.value"
       :tempo-percent="player.tempoPercent.value"
       :base-tempo-bpm="player.baseTempoBpm.value"
@@ -115,11 +181,21 @@ onBeforeUnmount(() => {
       @open-sound-settings="openSoundSettings"
     />
 
+    <HitEvaluationHud
+      :is-playing="player.isPlaying.value"
+      :is-finished="player.isFinished.value"
+      :stats="evaluation.stats.value"
+      :last-result="evaluation.lastResult.value"
+      :upcoming-notes="evaluation.upcomingNotes.value"
+      @reset-stats="evaluation.resetStats"
+    />
+
     <ScoreViewport
       ref="scoreViewportRef"
       :is-ready="player.isReady.value"
       :loaded-file-name="player.loadedFileName.value"
       :error-message="player.errorMessage.value"
+      :bar-hit-markers="barHitMarkers"
       @file-dropped="player.loadGpFile"
     />
 

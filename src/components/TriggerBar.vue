@@ -123,10 +123,24 @@ const emit = defineEmits<{
           data-testid="event-log-item"
           :data-event-note="ev.note"
           :data-event-source="ev.sourceId"
+          :data-event-judgment="ev.judgment ?? ''"
         >
           <span class="ev-note">MIDI {{ ev.note }}</span>
           <span class="ev-label">{{ ev.label ?? ev.rawCode }}</span>
-          <span class="ev-source">{{ ev.sourceId }}</span>
+          <span
+            v-if="ev.judgment"
+            class="ev-judgment"
+            :class="[`is-${ev.judgment}`, `timing-${ev.timingStatus ?? 'none'}`]"
+          >
+            <template v-if="ev.timingStatus === 'on-time'">ON TIME</template>
+            <template v-else-if="ev.timingStatus === 'early'">EARLY</template>
+            <template v-else-if="ev.timingStatus === 'late'">LATE</template>
+            <template v-else>MISS</template>
+            <template v-if="ev.deltaMs !== null && ev.deltaMs !== undefined">
+              ({{ ev.deltaMs > 0 ? `+${ev.deltaMs}` : ev.deltaMs }}ms)
+            </template>
+          </span>
+          <span v-else class="ev-source">{{ ev.sourceId }}</span>
           <span class="ev-time">{{ Math.round(ev.timestamp) }}ms</span>
         </li>
       </ul>

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { BarHitOverlayMarker } from '../types/evaluation'
 
 defineProps<{
   isReady: boolean
   loadedFileName: string
   errorMessage: string | null
+  barHitMarkers: readonly BarHitOverlayMarker[]
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +35,23 @@ function onDrop(event: DragEvent): void {
   }
 }
 
+function formatMarkerTooltip(marker: BarHitOverlayMarker): string {
+  const deltaStr =
+    marker.deltaMs !== null
+      ? ` (${marker.deltaMs > 0 ? '+' : ''}${marker.deltaMs}ms)`
+      : ''
+  if (marker.timingStatus === 'early') {
+    return `${marker.label} · Early${deltaStr}`
+  }
+  if (marker.timingStatus === 'on-time') {
+    return `${marker.label} · On Time${deltaStr}`
+  }
+  if (marker.timingStatus === 'late') {
+    return `${marker.label} · Late${deltaStr}`
+  }
+  return `${marker.label} · Miss`
+}
+
 defineExpose({
   viewportElement,
 })
@@ -49,9 +68,21 @@ defineExpose({
     @drop="onDrop"
   >
     <div class="stage-subheader">
-      <span class="file-source-tag" data-testid="loaded-file-name">
-        Source: {{ loadedFileName }}
-      </span>
+      <div class="stage-subheader-left">
+        <span class="file-source-tag" data-testid="loaded-file-name">
+          Source: {{ loadedFileName }}
+        </span>
+        <span class="overlay-legend" aria-label="Note Hit Color Legend">
+          <span class="legend-dot is-early" aria-hidden="true" />
+          <span>Early</span>
+          <span class="legend-dot is-on-time" aria-hidden="true" />
+          <span>On Time</span>
+          <span class="legend-dot is-late" aria-hidden="true" />
+          <span>Late</span>
+          <span class="legend-dot is-miss" aria-hidden="true" />
+          <span>Miss</span>
+        </span>
+      </div>
       <span class="drop-hint">
         Drag &amp; drop any <code>.gp3</code>–<code>.gp8</code> file onto the score to load
       </span>
@@ -78,11 +109,36 @@ defineExpose({
     </div>
 
     <div class="alphatab-scroll-frame">
-      <div
-        ref="viewportElement"
-        class="alphatab-surface"
-        data-testid="alphatab-surface"
-      ></div>
+      <div class="score-sheet-wrapper">
+        <div
+          ref="viewportElement"
+          class="alphatab-surface"
+          data-testid="alphatab-surface"
+        ></div>
+
+        <div
+          class="bar-hit-overlay-layer"
+          aria-hidden="true"
+          data-testid="bar-hit-overlay"
+          :data-marker-count="barHitMarkers.length"
+        >
+          <div
+            v-for="marker in barHitMarkers"
+            :key="marker.id"
+            class="bar-notehead-ring"
+            :class="`status-${marker.timingStatus}`"
+            :style="{
+              left: `${marker.noteHeadX}px`,
+              top: `${marker.noteHeadY}px`,
+            }"
+            :title="formatMarkerTooltip(marker)"
+            data-testid="bar-hit-marker"
+            :data-judgment="marker.judgment"
+            :data-timing-status="marker.timingStatus"
+            :data-label="marker.shortLabel"
+          />
+        </div>
+      </div>
     </div>
   </main>
 </template>

@@ -7,6 +7,7 @@ const props = defineProps<{
   isPlayerReady: boolean
   isSoundFontLoaded: boolean
   isPlaying: boolean
+  isFinished: boolean
   isLooping: boolean
   tempoPercent: number
   baseTempoBpm: number
@@ -108,8 +109,12 @@ function onFileSelected(event: Event): void {
         :aria-pressed="isPlaying"
         @click="emit('togglePlayPause')"
       >
-        <span aria-hidden="true">{{ isPlaying ? '⏸' : '▶' }}</span>
-        <span>{{ isPlaying ? 'Pause' : 'Play' }}</span>
+        <span aria-hidden="true">{{
+          isPlaying ? '⏸' : isFinished ? '↺' : '▶'
+        }}</span>
+        <span>{{
+          isPlaying ? 'Pause' : isFinished ? 'Replay' : 'Play'
+        }}</span>
       </button>
 
       <button
@@ -117,10 +122,19 @@ function onFileSelected(event: Event): void {
         class="btn"
         data-testid="transport-stop"
         :disabled="!isReady"
+        :title="
+          isPlaying
+            ? 'Halt playback in place to analyze results'
+            : 'Rewind cursor to the start of the score'
+        "
         @click="emit('stop')"
       >
-        <span aria-hidden="true">⏹</span>
-        <span>Stop</span>
+        <span aria-hidden="true">{{
+          !isPlaying && currentTick > 0 ? '⏮' : '⏹'
+        }}</span>
+        <span>{{
+          !isPlaying && currentTick > 0 ? 'Start' : 'Stop'
+        }}</span>
       </button>
 
       <button
